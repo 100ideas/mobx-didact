@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "mobx": "^5.9.4",
+    "mobx-react-lite": "^1.3.0",
+    "nanoid": "^2.0.1",
+    "rbx": "^2.1.0",
     "react": "^16.8.6",
     "react-dom": "^16.8.6",
     "react-scripts": "3.0.0"
