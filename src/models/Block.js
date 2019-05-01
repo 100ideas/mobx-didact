@@ -1,13 +1,17 @@
-import { action, computed, observable, set } from 'mobx';
+import { action, computed, decorate, observable, set } from 'mobx';
+import nanoid from 'nanoid'
 
-export default class Block {
-  @observable id
-  @observable isSaving
+export class Block {
+  // @observable id
+  // @observable isSaving
+  id
+  isSaving
   store
 
   constructor(fields, _store) {
     set(this, fields);
     this.store = _store;
+    this.id = nanoid(4)
   }
 
   // save = async params => {
@@ -47,3 +51,9 @@ export default class Block {
     return { ...this };
   };
 }
+
+decorate(Block, {
+  id: observable,
+  isSaving: observable,
+  store: observable
+});

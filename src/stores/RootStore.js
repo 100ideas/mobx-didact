@@ -1,5 +1,5 @@
-import BlocksStore   from './BlockStore'
-import OpsStore      from './OpStore';
+import BlocksStore   from './BlocksStore'
+import OpsStore      from './OpsStore';
 
 export default class RootStore {
   constructor() {

@@ -1,7 +1,14 @@
-import React from 'react';
+import React, { useContext } from 'react'
+import { observer } from "mobx-react-lite";
+import { mobxStore } from './stores'
 import './App.scss';
 
+
+
 function App() {
+  const store = useContext(mobxStore)
+
+  // TODO make observer
   return (
     <div className="App">
       <header className="App-header">
@@ -18,8 +25,15 @@ function App() {
           Learn React
         </a>
       </header>
+
+      <h3>store:ops</h3>
+      <pre className="notelist">
+        { JSON.stringify(store.ops.tojs(), null, 2) }
+      </pre>
+      <button onClick={() => store.ops.add({name: "woot"})}>insert new op</button>
+    
     </div>
   );
 }
 
-export default App;
+export default observer(App);

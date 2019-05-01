@@ -1,13 +1,18 @@
-import { action, computed, observable, set } from 'mobx';
+import { action, computed, decorate, observable, set, toJS } from 'mobx';
+import nanoid from 'nanoid'
 
-export default class Op {
-  @observable id
-  @observable isSaving
+export class Op {
+  // @observable id
+  // @observable isSaving
+  id
+  isSaving
+  name
   store
 
   constructor(fields, _store) {
     set(this, fields);
     this.store = _store;
+    this.id = nanoid(4)
   }
 
   // save = async params => {
@@ -46,4 +51,16 @@ export default class Op {
   toJS = () => {
     return { ...this };
   };
+  _tojs = () => ({
+    id: toJS(this.id),
+    name: toJS(this.name)
+  })
+  // _tojs = () => ({ id, name } = toJS(this))
 }
+
+decorate(Op, {
+  id: observable,
+  isSaving: observable,
+  store: observable,
+  // toJS: computed,
+});
