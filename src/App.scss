@@ -1,0 +1,38 @@
+.App {
+  font-family: sans-serif;
+  text-align: center;
+}
+
+.notelist {
+  max-width: 800px;
+  margin: 0 auto;
+  text-align: left;
+
+  .block {
+    border-top: 2px solid black;
+    
+    h4 {
+      display: inline-block;
+      margin-bottom: 0;
+      margin-right: 1em;
+    }
+
+  }
+
+  .op {
+    border-top: 1px dashed grey;
+    margin: 2em 0 2em 4em;
+
+    .params {margin-left: 2em;}
+    
+    .iotag {
+      margin-left: 1em;
+      border-bottom: 2px solid black;
+    }
+    
+    .ready {margin-right: 1em;}
+    .ready.true { color: green }
+    .ready.false { color: red }
+    
+  }
+}
