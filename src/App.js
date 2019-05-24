@@ -1,18 +1,15 @@
-import React, { useContext } from 'react'
+import React from 'react'
 import { observer } from "mobx-react-lite";
-import { mobxStore } from './stores'
+import { StoreProvider, useStore } from "./stores";
 import './App.scss';
 
 
+const Landing = observer(() => {
+  const store = useStore();
 
-function App() {
-  const store = useContext(mobxStore)
-
-  // TODO make observer
   return (
-    <div className="App">
+    <main>
       <header className="App-header">
-        
         <p>
           Edit <code>src/App.js</code> and save to reload.
         </p>
@@ -28,12 +25,26 @@ function App() {
 
       <h3>store:ops</h3>
       <pre className="notelist">
-        { JSON.stringify(store.ops.tojs(), null, 2) }
+        { JSON.stringify( store.ops.serialize(), null, 2 ) }
       </pre>
-      <button onClick={() => store.ops.add({name: "woot"})}>insert new op</button>
-    
-    </div>
+      <button onClick={ () => store.ops.add( { name: "woot" } ) }>insert new op</button>
+    </main>
+  )
+})
+
+
+function App() {
+
+  return (
+    <StoreProvider>
+      <div className="App">
+
+      <Landing />
+
+      </div>
+    </StoreProvider>
   );
 }
 
-export default observer(App);
+export default App;
+    

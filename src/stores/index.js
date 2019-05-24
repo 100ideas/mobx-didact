@@ -1,4 +1,4 @@
-import React, { createContext, useContext } from 'react';
+import React from 'react';
 import RootStore from './RootStore';
 
 const rootStore = new RootStore();
@@ -8,19 +8,21 @@ mockOps.map(item => rootStore.ops.add(item))
 
 // console.log(rootStore.ops.tojs())
 
-export const mobxStore = createContext(rootStore);
 
-// export const StoreProvider = ({ children }) => {
-//   return (
-//     <MobX.Provider value={rootStore}>
-//       {children}
-//     </MobX.Provider>
-//   );
-// };
+export const storeContext = React.createContext(null);
 
-// export const useStore = store => {
-//   const { state, dispatch } = useContext(MobX);
-//   return { state, dispatch };
-// };
+export const StoreProvider = ({ children }) => {
+  const [store] = React.useState(rootStore);
+  return (
+    <storeContext.Provider value={store}>{children}</storeContext.Provider>
+  );
+};
 
-export default rootStore;
+export const useStore = () => {
+  const store = React.useContext(storeContext);
+  if (!store) {
+    // this is especially useful in TypeScript so you don't need to be checking for null all the time
+    throw new Error("You have forgot to use StoreProvider, shame on you.");
+  }
+  return store;
+};
