@@ -14,10 +14,12 @@ export class Op {
     this.id = fields.id ? fields.id : nanoid(4)
   }
 
-  _tojs = () => ({
-    id: toJS(this.id),
-    name: toJS(this.name)
-  } )
+  get toJS() {
+    return {
+      id: toJS( this.id ),
+      name: toJS( this.name )
+    }
+  }
   
   serialize = () => {
     let { id, name } = toJS(this)
@@ -28,5 +30,5 @@ export class Op {
 decorate(Op, {
   id: observable,
   store: observable,
-  // toJS: computed,
+  toJS: computed,
 });

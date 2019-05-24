@@ -4,9 +4,6 @@ import { action, computed, decorate, observable, runInAction, set, toJS } from '
 import { Op } from '../models';
 
 export default class OpsStore {
-  get ops() { // getter
-    return this._data.entries();
-  }
   constructor(_rootStore) {
     this.rootStore = _rootStore
     this.model = Op
@@ -31,20 +28,42 @@ export default class OpsStore {
     return item;
   }
 
-  // tojs = () => toJS(this.data)
-  // tojs = () => Array.from(this.data.values()).map( item => toJS(item))
-  // tojs = () => Array.from(this.data.values()).map( item => item._tojs() )
+  // ident: < id | name | searchstring > :: [opModel]
+  find( ident ) {
+    // if ( id === null && name === null && arguments[ 0 ] ) {
+    //   console.log(arguments[0])
+    //   id = arguments[ 0 ] // accept non-object param as id
+    // }
+    if (this._data.has(ident)) return [this._data.get(ident)]
+
+    let matches = this.values.filter( v => v.name === ident )
+    if ( matches.length > 0 ) return matches 
+      
+    matches = this.values.filter( v => v.name.indexOf( ident ) > -1 )
+    return matches
+    
+  }
   
   // computed
-  serialize = () => {
+  get values() { // getter
+    return Array.from(this._data.values())
+  }
+  // computed
+  get serializedMap() {
     const opsJson = {}
-    this._data.forEach( ( val, key ) => opsJson[ val.name ] = val.serialize() )
+    this.values.map(v => opsJson[v.name] = v.serialize());
     return opsJson
+  }
+  // computed
+  get serializedArray() {
+    return this.values.map(v => v.serialize());
   }
 }
 
 decorate(OpsStore, {
   _data: observable,
   add: action,
-  // serialize: computed
+  values: computed,
+  serializedMap: computed,
+  serializedArray: computed
 })

@@ -3,7 +3,7 @@ import RootStore from './RootStore';
 
 const rootStore = new RootStore();
 
-const mockOps = [{ name: 'mock/op1' }, {name: 'mock/api/fetch'}]
+const mockOps = [{ name: 'mock/op1' }, {name: 'mock/api/fetch'}, {name: 'mock/csv/parse', id: "@csv/1"}]
 mockOps.map(item => rootStore.ops.add(item))
 
 // console.log(rootStore.ops.tojs())
