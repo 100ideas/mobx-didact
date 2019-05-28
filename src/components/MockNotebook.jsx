@@ -6,6 +6,7 @@ import {
   action,
   computed,
   decorate,
+  observe,
   observable,
   isObservable,
   toJS,
@@ -85,13 +86,12 @@ function TableView( {data} ){
 
   const TableRows = data.recordIds.map( rid => 
   <Table.Row key={rid}>
-    {data.cols.map( cid => {
-      console.log(rid + '-' + cid)
-      return <Table.Cell key={rid + '-' + cid}>
-        {data.getRecord(rid)[cid]}
-        <Button onClick={() => data.update({[rid]: {[cid]: 'updafrooo'}}) }>?</Button>
+    {data.cols.map( cid => 
+      <Table.Cell key={rid + '-' + cid} className={data.isDirty(rid, cid) ? 'dirty' : ''}>
+        {data.records.get(rid)[cid]}
+        {/* <Button onClick={() => data.update({[rid]: {[cid]: 'updafrooo'}}) }>?</Button> */}
+        <Button onClick={() => data.setRecord([rid, cid, 'updafrooo']) }>?</Button>
       </Table.Cell>
-    }
     )}
   </Table.Row>
 )
@@ -153,77 +153,104 @@ const Viewers = {
 
 function MobxCxnFactory(data) {
   const cxn = observable({
-    _cols: {},
-    // records: new Map(),
-    records: {
-      vals: {},
-      _meta: { 
-        rids: [],
-        cols: []
-      }
-    },
+    cols: [],
+    records: new Map(),
     log: [],
     update(obj) {
       let maybe_rids = Object.keys(obj)
       let updates = maybe_rids.map(rid => {
-        if(cxn.records._meta.rids.indexOf(rid) > -1) {
-          let _old = cxn.records.vals[rid]
+        if(cxn.records.has(rid)) {
+          let _old = cxn.records.get(rid)
           let _new = obj[rid]
-          let _merged = {..._old, ..._new}
-          // obj = {[rid]: {..._old, ..._new}}
-          _set(cxn.records.vals, rid, _merged)
+          let _merge = {..._old, ..._new}
+          // // obj = {[rid]: {..._old, ..._new}}
+          // _set(this.records, rid, _merged)
           // // return _merged
-          // cxn.records.merge(obj)
-          return obj
+          console.log("cxn updating", toJS(cxn.records.get(rid)), ' + ', obj[rid], ' -> ', _merge )
+          // cxn.records.merge( {[rid]: obj[rid]} )
+          // cxn.records.set( rid, _merge )
+          Object.keys(_new).map( key => {
+            _old[key] = _new[key]
+          })
+          console.log("cxn update", toJS(cxn.records.get(rid)))
+          return {op: 'set', val: obj}
         }
-        _set(cxn.records.vals, rid, obj[rid])
-        cxn.records._meta.rids.push(rid)
+        cxn.records.set(rid, obj[rid])
         return obj  
       })
       cxn.log.push(updates)
     },
     getCol(colId){ return Array.from(cxn.records.values()).map( row => row[colId] ) },
 
-    getRecord(rid){ return rid in cxn.records.vals ? toJS(cxn.records.vals[rid]) : {} },
+    getRecord( rid, cid = null ) {
+      let rec = cxn.records.has(rid) ? cxn.records.get(rid) : false
+      if (!rec) return {}
+      if (cid === null) return toJS( rec )
+      return toJS(rec[cid])
+    },
+
+    setRecord( [rid, cid, val] ) {
+      let rec = cxn.records.has(rid) ? cxn.records.get(rid) : false
+      if (!rec) return {}
+      if (cid in rec) {
+        rec[cid] = val
+        cxn.log.push([rid, cid, val])
+      }
+    },
     
     get rows() {
-      return cxn.recordIds.map( id => toJS(cxn.records[id]) )
+      return [...this.records.values()].map( v => toJS(v))
     },
     get recordIds() {
-      // console.dir(toJS(cxn.records))
-      // return cxn.records.model 
-      //   ? Object.keys(cxn.records).filter(key => key !== '_meta')
-      //   : Object.keys(cxn.records).filter(key => key !== '_meta')
-      return cxn.records._meta.rids
+      return [...this.records.keys()]
     },
-    get cols() {
-      return cxn.records._meta.cols
-    },
-    // set cols(col) {
-    //   cxn.records._meta.cols.push(col)
-    // }
+    isDirty(rid, cid) {
+      let rec = cxn.records.has(rid) ? cxn.records.get(rid) : false
+      if (!rec) return false
+      if (rec.isPropertyDirty) {
+        let dirty = rec.isPropertyDirty(cid)
+        console.log(dirty)
+        return dirty
+      }
+    }
   }, {
-    records: observable,
-    update: action,
-    // _cols: computed
+
+//   cols: observable,
+//   // recordIds: observable,
+  records: observable,
+//   log: observable,
+//   update: action,
+//   // getCol: computed,
+//   // getRecord: computed,
+//   rows: computed,
+//   recordIds: computed,
+//   // columns: computed,
   })
 
   // pseudo-constructor
   if ( isObservable(data) ) {
-    console.dir("pseudo-constructor", data.records._meta)
-    // cxn._cols = createViewModel(data._cols)
-    cxn.records = createViewModel(data.records)
+    console.dir("pseudo-constructor", toJS(data.records))
+    data.records.forEach( (value, key) => {
+      cxn.records.set(key, createViewModel(value))
+    })
+    // hande additions from upstream
+    observe(data.records, (change) => {
+      console.log('pseudoConstructor observe data.records.keys,', toJS(change))
+      cxn.records.set(change.name, createViewModel(data.records.get(change.name)))
+    })
+    // TODO handle deletions from upstream - remove viewModel from local?
+    // ...
+
+    // TODO need to make cols a viewModel as well
+    cxn.cols = toJS(data.cols)
   } else {  
     data.rows.map( r => {
       const _id = r.id ? r.id : nanoid(4)
-      _set(cxn.records.vals, _id, r )
-      cxn.records._meta.rids.push(_id)
+      cxn.records.set(_id, r)
     })
-    // data.columns.map( c => c.name ? c.name : c ).map( (c, idx) => _set(cxn._cols, idx, c) )
-    // cxn.records._meta = {cols: []}
-    cxn.records._meta.cols = data.columns.map( c => c.name ? c.name : c )
-    console.log("tried setting records._meta", cxn.records._meta)
+    cxn.cols = data.columns.map( c => c.name ? c.name : c )
   }
+
 
   return cxn
 }
@@ -257,12 +284,10 @@ const mockNewRow = { 'rid11': {region: "Baztarctica", sector: "Fooing", customer
 
 export const mobxMockCollection1 = MobxCxnFactory(mockCollection1)
 
-// const viewModel = createViewModel(mobxMockCollection1);
+// export const viewModel = createViewModel(mobxMockCollection1);
+export const viewModel = MobxCxnFactory(mobxMockCollection1);
 // viewModel.records = createViewModel(mobxMockCollection1.records)
 // export const viewModel = mobxMockCollection1;
-const viewModel = MobxCxnFactory(mobxMockCollection1)
-
-console.log("mobxCxn cols:", mobxMockCollection1.cols)
 
 console.log(getAllMethodsAndProperties(viewModel))
 autorun(() => {
@@ -270,11 +295,12 @@ autorun(() => {
   console.log(viewModel.changedValues)
 })
 
-viewModel.records['ridfoo'] = {country: "bazerzstan"}
+viewModel.cols.push( 'rid12' )
+// viewModel.cols[5] = 'rid08'
 // _set(viewModel.records, 'rid12', mockNewRow['rid11'] )
 // viewModel['new'] = {foo: 'foo'}
 
-export {viewModel}
+// export {viewModel}
 
 
 
