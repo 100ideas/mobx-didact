@@ -1,7 +1,7 @@
 import React from 'react'
 import { StoreProvider } from "./stores";
 import { MockOpsList } from './components/MockOpsList'
-import { CollectionViewer } from './components/MockNotebook'
+import { CollectionViewer, mobxMockCollection1, viewModel } from './components/MockNotebook'
 
 import "rbx/index.css";
 import './App.scss';
@@ -13,7 +13,9 @@ function App() {
   return (
     <StoreProvider>
       <div className="App">
-        <CollectionViewer />
+        <CollectionViewer data={mobxMockCollection1}/>
+        <hr />
+        <CollectionViewer data={viewModel}/>
         
         {/*
         <RbxPanel />

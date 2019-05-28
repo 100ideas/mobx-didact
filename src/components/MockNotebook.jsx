@@ -1,7 +1,16 @@
 import React from 'react'
 
 import nanoid from 'nanoid'
-import { action, computed, decorate, observable, set as _set } from 'mobx';
+import { 
+  autorun, 
+  action,
+  computed,
+  decorate,
+  observable,
+  isObservable,
+  toJS,
+  set as _set } from 'mobx';
+import { createViewModel, getAllMethodsAndProperties } from 'mobx-utils'
 import { observer, Observer } from "mobx-react-lite";
 
 
@@ -42,11 +51,13 @@ const Butns = ({ clickHandler }) =>
 export function _CollectionViewer( props ){
   const [viewMode, setViewMode] = React.useState('table')
 
-  const data = props.data ? props.data : mobxMockCollection1
+  // const data = props.data ? props.data : mobxMockCollection1
+  const data = props.data ? props.data : {}
+  // console.log(data)
   
   return <Section>
     
-    <Button onClick={() => data.rows.push({region: "Baztarctica", sector: "Fooing", customer: "Bazman Bazzer", product: "Foobar Baz", amount: 12333})}>
+    <Button onClick={() => data.update( mockNewRow )}>
       addRow
     </Button>
     <Butns clickHandler={ setViewMode } />
@@ -112,13 +123,14 @@ function CardView( props ){
 }
 
 function ListView( {data} ){
-  const firstCol = data.columns[ 0 ].name || data.columns[ 0 ]
+  const firstCol = data.columns[ 0 ]
   return <div>
     <h2>ListView</h2>
     <List>
       {data.recordIds.map( (rid, idx) =>
         <List.Item 
           key={firstCol + '-' + rid}
+          // TODO use reaction in collection to set log and use direct prop assignment here
           onClick={() => data.update( { [rid]: { [firstCol]: 'superfoo update' } } )}
         >
           { JSON.stringify(data.records[rid][firstCol]) }
@@ -145,26 +157,27 @@ class MobxCollection {
 
   constructor(_data) {
     // _data.rows.map( r => this.records.set( r.id ? r.id : nanoid(4), r ))
-    _data.rows.map( r => {
-      const _id = r.id ? r.id : nanoid(4)
-      // this.records.set( _id, r )
-      _set(this.records, _id, r)
-      // this.recordIds.push( _id )
-    })
-    this.cols = _data.columns.map( c => c.name )
+    // if (isObservable(_data)) {
+    //   this.records = _data.records
+    //   this.cols = _data.cols
+    // } else {
+      _data.rows.map( r => {
+        const _id = r.id ? r.id : nanoid(4)
+        // this.records.set( _id, r )
+        _set(this.records, _id, r)
+        // this.recordIds.push( _id )
+      })
+      this.cols = _data.columns.map( c => c.name ? c.name : c )
+    // }
   }
 
   //computed?
-  getValuesFromColumn( colId ){
-    return this.recordIds.map( rid => this.records[rid][colId] )
-  }
+  getValuesFromColumn = colId => this.recordIds.map( rid => this.records[rid][colId] )
   
-  getRecord( rid ){
-    return this.recordIds[rid]
-  }
+  getRecord = rid => this.recordIds[rid]
 
   //action
-  update( obj ){
+  update = obj => {
     let maybe_rids = Object.keys(obj)
     let updates = maybe_rids.map(rid => {
       if(rid in this.records) {
@@ -180,7 +193,7 @@ class MobxCollection {
       return obj  
     })
     this.log.push(updates)
-  }
+  };
 
   get columns(){
     return this.cols
@@ -225,4 +238,83 @@ export const mockCollection1 = {
   ],
 };
 
-const mobxMockCollection1 = new MobxCollection(mockCollection1)
+const mockNewRow = { 'rid11': {region: "Baztarctica", sector: "Fooing", customer: "Bazman Bazzer", product: "Foobar Baz", amount: 12333}}
+
+export const mobxMockCollection1 = new MobxCollection(mockCollection1)
+// export const mobxMockCollection2 = new MobxCollection(mobxMockCollection1)
+
+export const viewModel = createViewModel(mobxMockCollection1.records);
+
+console.log(getAllMethodsAndProperties(viewModel))
+autorun(() => {
+  console.log(toJS(viewModel.model.records), ",", toJS(viewModel.records))
+  console.log(viewModel.changedValues)
+})
+
+// viewModel.cols.push( 'rid12' )
+// _set(viewModel.records, 'rid12', mockNewRow['rid11'] )
+viewModel['new'] = {foo: 'foo'}
+
+
+
+class MobxCollectionNamedFxn {
+  cols = []
+  // recordIds = []
+  // records = new Map();
+  records = {}
+  log = []
+
+  constructor(_data) {
+    // _data.rows.map( r => this.records.set( r.id ? r.id : nanoid(4), r ))
+    if (isObservable(_data)) {
+      this.records = _data.records
+      this.cols = _data.cols
+    } else {
+      _data.rows.map( r => {
+        const _id = r.id ? r.id : nanoid(4)
+        // this.records.set( _id, r )
+        _set(this.records, _id, r)
+        // this.recordIds.push( _id )
+      })
+      this.cols = _data.columns.map( c => c.name ? c.name : c )
+    }
+  }
+
+  //computed?
+  getValuesFromColumn( colId ){
+    return this.recordIds.map( rid => this.records[rid][colId] )
+  }
+  
+  getRecord( rid ){
+    return this.recordIds[rid]
+  }
+
+  //action
+  update( obj ){
+    let maybe_rids = Object.keys(obj)
+    let updates = maybe_rids.map(rid => {
+      if(rid in this.records) {
+        let _old = this.records[rid]
+        let _new = obj[rid]
+        let _merged = {..._old, ..._new}
+        // obj = {[rid]: {..._old, ..._new}}
+        _set(this.records, rid, _merged)
+        // return _merged
+        return obj
+      }
+      _set(this.records, obj)
+      return obj  
+    })
+    this.log.push(updates)
+  }
+
+  get columns(){
+    return this.cols
+  }
+  get rows(){
+    return this.recordIds.map( rid => this.records[rid] )
+  }
+  get recordIds(){
+    return Object.keys(this.records)
+  }
+}
