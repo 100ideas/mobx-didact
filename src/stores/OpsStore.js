@@ -17,7 +17,7 @@ export default class OpsStore {
     if (!(item instanceof Model)) {
       const existing = this._data.get(item.id);
       if (existing) {
-        set(existing, item);
+        set(existing, item);  // merge new properties into exisiting Model instance
         return existing;
       } else {
         item = new Model(item, this);
@@ -28,13 +28,13 @@ export default class OpsStore {
     return item;
   }
 
-  // ident: < id | name | searchstring > :: [opModel]
+  // find( ident: < id | name | searchstring >) :: [opModel]
   find( ident ) {
     // if ( id === null && name === null && arguments[ 0 ] ) {
     //   console.log(arguments[0])
     //   id = arguments[ 0 ] // accept non-object param as id
     // }
-    if (this._data.has(ident)) return [this._data.get(ident)]
+    if (this._data.has(ident)) return [ this._data.get(ident) ]
 
     let matches = this.values.filter( v => v.name === ident )
     if ( matches.length > 0 ) return matches 
