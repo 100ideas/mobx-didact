@@ -16,7 +16,7 @@ import { observer, Observer } from "mobx-react-lite";
 
 
 // import { Button, Checkbox, Content, Control, Icon, Input, Panel } from "rbx";
-import { Button, Icon, List, Section, Table } from "rbx";
+import { Button, Control, Delete, Heading, Icon, Field, Level, List, Section, Table, Tag, Title } from "rbx";
 import {
   faList,
   faTable,
@@ -54,11 +54,11 @@ export function _CollectionViewer( props ){
 
   // const data = props.data ? props.data : mobxMockCollection1
   const data = props.data ? props.data : {}
-  console.log(data.allCols, data.hiddenCols)
+  console.log(data.colInfo,)
   
   return <Section>
     
-    <Button onClick={() => data.update( mockNewRow )}>
+    <Button onClick={() => data.update( mockNewRow() )}>
       addRow
     </Button>
 
@@ -81,37 +81,63 @@ export function _CollectionViewer( props ){
 export const CollectionViewer = observer(_CollectionViewer)
 
 function TableView( {data} ){
+
+  const ColumnTags = () => {
+
+    const MakeTagGroup = ( {name, freq, hidden} ) => 
+      <Control>
+        <Tag.Group gapless onClick={() => data.toggleCol(name)}>
+          <Tag color={hidden ? "light" : "dark"}>{name}</Tag>
+          <Tag color="info">{freq}</Tag>
+        </Tag.Group>
+      </Control>
+
+    return (
+      <>
+        <Heading>available columns</Heading>
+        <Field kind="group" multiline>
+          {data.colInfo.stats.map( info => MakeTagGroup(info) )}
+        </Field>
+      </>
+    )
+  }
   
   const TableHeadings = data.cols.map( (c, idx) => 
     <Table.Heading key={idx + '-' + c}>
-      {c} 
-      <Button 
-        size='small' 
-        color='danger' 
-        rounded 
-        inverted 
-        onClick={ () => data.toggleCol(c) }>x</Button>
+      <Level>
+        <Level.Item>{c}</Level.Item>
+        <Level.Item> 
+          <Delete 
+            size='small' 
+            color='danger' 
+            rounded 
+            inverted 
+            onClick={ () => data.toggleCol( c ) }>
+            x
+          </Delete>
+        </Level.Item>
+      </Level>
     </Table.Heading>
   )
 
   const TableRows = data.recordIds.map( rid => 
-  <Table.Row key={rid}>
-    {data.cols.map( cid => 
-      <Table.Cell key={rid + '-' + cid} className={data.isDirty(rid, cid) ? 'dirty' : ''}>
-        {data.records.get(rid)[cid]}
-        {/* <Button onClick={() => data.update({[rid]: {[cid]: 'updafrooo'}}) }>?</Button> */}
-        <Button onClick={() => data.setRecord([rid, cid, 'updafrooo']) }>?</Button>
-        { data.isDirty( rid, cid )
-          ? <Button small onClick={ () => data.resetLocalChange( [ rid, cid ] ) }>x</Button>
-          : ''
-        }
-      </Table.Cell>
-    )}
-  </Table.Row>
-)
+    <Table.Row key={rid}>
+      {data.cols.map( cid => 
+        <Table.Cell key={rid + '-' + cid} className={data.isDirty(rid, cid) ? 'dirty' : ''}>
+          {data.records.get(rid)[cid]}
+          {/* <Button onClick={() => data.update({[rid]: {[cid]: 'updafrooo'}}) }>?</Button> */}
+          <Button onClick={() => data.setRecord([rid, cid, 'updafrooo']) }>?</Button>
+          { data.isDirty( rid, cid )
+            ? <Button small onClick={ () => data.resetLocalChange( [ rid, cid ] ) }>x</Button>
+            : ''
+          }
+        </Table.Cell>
+      )}
+    </Table.Row>
+  )
 
   return <div>
-    <h2>TableView</h2>
+    <Heading>TableView</Heading>
     
     <Table bordered>
       <Table.Head>
@@ -124,10 +150,16 @@ function TableView( {data} ){
       </Table.Body>
     </Table>
 
+    <ColumnTags />
+
     {/* <pre>{ JSON.stringify( data, null, 2 ) }</pre> */}
 
   </div>
 }
+
+
+
+
 
 function CardView( props ){
 
@@ -222,11 +254,14 @@ function MobxCxnFactory(data) {
           console.log("swapping", col, "from cxn._meta.toggledCols into cxn.cols" )
           cxn._meta.toggledCols.remove(col)
           cxn.cols.push(col)
+        } else {
+          console.log(`col <${col}> was not in cxn.cols nor cxn._meta.toggledCols... must be new\n\tpushing to cxn.cols...`)
+          cxn.cols.push(col)
         }
       }
     },
 
-    get allCols() {
+    get colInfo() {
       let tallys = new Map()
       let tally = (cols) => {
         if (!isArray(cols)) cols = [cols]
@@ -234,7 +269,7 @@ function MobxCxnFactory(data) {
           .filter( c => !skipCols.has(c) )
           .map( col => tallys.has(col) 
             ? tallys.set(col, tallys.get(col) + 1)
-            : tallys.set(col, 0)
+            : tallys.set(col, 1)
           )
       }
       let skipCols = new Set(['isPropertyDirty', 'localComputedValues', 'localValues', 'model']) // maybe set by mobx viewModel
@@ -246,10 +281,14 @@ function MobxCxnFactory(data) {
                  // [...[key, val]] 
       let _sorted = [...tallys.entries()].sort( (a, b) => b[1] - a[1] )
       console.log("column frequencies", _sorted)
-      return _sorted.map( el => el[0] )
-    },
-    get hiddenCols() {
-      return cxn.allCols.filter(colName => cxn.cols.indexOf(colName) < 0)
+      return { 
+        sorted: _sorted.map(el => el[0]), 
+        stats: _sorted.map(el => ({ 
+          "name": el[0], 
+          "freq": el[1], 
+          "hidden": cxn.cols.indexOf(el[0]) < 0 
+        }))
+      }
     },
     
     get rows() {
@@ -287,7 +326,7 @@ function MobxCxnFactory(data) {
   toggleCol: action,
   rows: computed,
   recordIds: computed,
-  allCols: computed,
+  colInfo: computed,
 //   // columns: computed,
   })
 
@@ -340,7 +379,7 @@ export const mockCollection1 = {
   ],
 };
 
-const mockNewRow = { 'rid11': {region: "Baztarctica", sector: "Fooing", customer: "Bazman Bazzer", product: "Foobar Baz", amount: 1337, "my_FAV_ROW": 'nullo'}}
+const mockNewRow = () => ({ [nanoid(4)]: {region: "Baztarctica", sector: "Fooing", customer: "Bazman Bazzer", product: "Foobar Baz", amount: 1337, "my_FAV_ROW": 'nullo'}})
 
 // thanks, @Christoph https://stackoverflow.com/a/1058753
 function isArray(obj) {
