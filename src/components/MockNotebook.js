@@ -59,44 +59,53 @@ const Butns = ({ clickHandler }) =>
 
 // TODO need to make this all observers& table componeents too
 // const DirectInput = ({currentVal, setVal}) => {
-  const DirectInput = ({cxn, address, setVal}) => {
-  const cxnVal = cxn.records.get(address[0])[address[1]]
-  const [editing, setEditing] = React.useState({static: true, readOnly: true})
-  const [value, setValue] = React.useState(cxnVal)
-  function toggleEditing(){ 
-    if(editing) setValue(cxnVal) // transition from edit -> static, so restore original/updated value
-    setEditing( editing ? false : {static: true, readOnly: true} )
-  }
+  const DirectInput = observer(({cxn, address, setVal}) => {
+    // console.log("DirectInput", address, setVal, cxn)
 
-  const keys = {
-    TAB:    9,
-    ENTER:  13,
-    ESCAPE: 27
-  }
-
-  let handlers = {
-    onClick:  ev => { console.log('click', editing); ev.preventDefault();  ev.stopPropagation(); toggleEditing()},
-    // onFocus:  ev => toggleEditing(),
-    // onBlur is causing textareas to toggle when not directly clicked on
-    // onBlur:   ev => { toggleEditing(); ev.preventDefault();  ev.stopPropagation(); }, //? redundant w/ escape?
-    onChange: ev => setValue(ev.target.value),
-    onKeyDown: ({which}) => {
-      if (which === keys.ESCAPE) {
-        toggleEditing()
-        // reset value to mobx?
-        return;
+    const [editing, setEditing] = React.useState(false)
+    
+    // TODO PROBLEM local useState store not upating to mobx changes to cxnVal
+    // - obviously. it's using its own local state...
+    const [value, setValue] = React.useState('') 
+    const localOrCxnVal = () => (editing) ? value : cxn.records.get(address[0])[address[1]]
+    
+    function toggleEditing(){ 
+      if(!editing) {
+        console.log("DirectInput: transition from edit -> static, so restore original/updated value:", localOrCxnVal())
       }
-      if (which === keys.ENTER) {
-        // setVal(value)
-        cxn.setRecord([...address, value])
-        console.log('saving to mobx cxn', value)
-        toggleEditing()
+      setEditing( !editing )
+    }
+
+    const keys = {
+      TAB:    9,
+      ENTER:  13,
+      ESCAPE: 27
+    }
+
+    let handlers = {
+      onClick: ev => { console.log('click', editing); ev.preventDefault();  ev.stopPropagation(); toggleEditing()},
+      // onFocus:  ev => toggleEditing(),
+      // onBlur:   ev => { toggleEditing(); ev.preventDefault();  ev.stopPropagation(); }, //? redundant w/ escape?
+      onChange: ev => setValue(ev.target.value),
+      onKeyDown: ({which}) => {
+        if (which === keys.ESCAPE || which === keys.TAB) {
+          console.log("which key:", which)
+          toggleEditing()
+          return;
+        }
+        if (which === keys.ENTER) {
+          cxn.setRecord([...address, value])
+          console.log('saving to mobx cxn', value)
+          toggleEditing()
+        }
       }
     }
-  }
-  
-  return <Input value={value} {...editing} {...handlers} />
-}
+
+    const editingProps = () => editing ? {} : {static: true, readOnly: true}
+    
+    // return <><p>cxnVal: {localOrCxnVal()}</p> <Input value={localOrCxnVal()} {...editing} {...handlers} /></> 
+    return <Input value={localOrCxnVal()} {...editingProps()} {...handlers} /> 
+})
 
 export const CollectionViewer = observer (function _CollectionViewer( props ){
   const [viewMode, setViewMode] = React.useState('table')
@@ -159,7 +168,6 @@ function TableView( {data} ){
     </Table.Heading>
   )
 
-
   // setter curry not working quite right
   // const gitterSetter = (rid, cid) => ({
   //   currentVal: data.records.get(rid)[cid],
@@ -168,24 +176,27 @@ function TableView( {data} ){
   const cxnGetter = (rid, cid) => data.records.get(rid)[cid]
   const cxnSetter = (rid, cid) => (val) => data.setRecord([rid, cid, val])
   
-  const TableRows = data.recordIds.map( rid => 
-    <Table.Row key={rid}>
-    {data.cols.map( cid => 
-      <Table.Cell key={rid + '-' + cid} className={data.isDirty(rid, cid) ? 'dirty' : ''}>
-        {/* { data.records.get(rid)[cid] } */}
-        { cxnGetter(rid, cid) }
-        {/* <DirectInput _val={cxnGetter(rid, cid)} /> */}
-        {/* <DirectInput currentVal={cxnGetter(rid, cid)} setVal={cxnSetter(rid, cid)} /> */}
-        {/* <DirectInput currentVal={data.records.get(rid)[cid]} setVal={cxnSetter(rid, cid)} /> */}
-        <DirectInput cxn={data} address={[rid,cid]} setVal={cxnSetter(rid, cid)} />
-        {/* <Button onClick={() => data.update({[rid]: {[cid]: 'updafrooo'}}) }>?</Button> */}
-        {/* <Button onClick={() => data.setRecord([rid, cid, 'updafrooo']) }>?</Button> */}
-        <Button onClick={() => cxnSetter(rid, cid)('updafrooo') }>?</Button>
-        { data.isDirty( rid, cid ) ? <Button small onClick={ () => data.resetLocalChange( [ rid, cid ] ) }>x</Button> : '' }
-      </Table.Cell>
-    )}
-    </Table.Row>
-  )
+  const TableRows = observer( () => {
+    
+    return (data.recordIds.map( rid => 
+      <Table.Row key={rid}>
+      {data.cols.map( cid => 
+        <Table.Cell key={rid + '-' + cid} className={data.isDirty(rid, cid) ? 'dirty' : ''}>
+          {/* { data.records.get(rid)[cid] } */}
+          {/* { cxnGetter(rid, cid) } */}
+          {/* <DirectInput _val={cxnGetter(rid, cid)} /> */}
+          {/* <DirectInput currentVal={cxnGetter(rid, cid)} setVal={cxnSetter(rid, cid)} /> */}
+          {/* <DirectInput currentVal={data.records.get(rid)[cid]} setVal={cxnSetter(rid, cid)} /> */}
+          <DirectInput cxn={data} address={[rid,cid]} setVal={cxnSetter(rid, cid)} />
+          {/* <Button onClick={() => data.update({[rid]: {[cid]: 'updafrooo'}}) }>?</Button> */}
+          {/* <Button onClick={() => data.setRecord([rid, cid, 'updafrooo']) }>?</Button> */}
+          <Button onClick={() => cxnSetter(rid, cid)('updafrooo') }>?</Button>
+          { data.isDirty( rid, cid ) ? <Button small onClick={ () => data.resetLocalChange( [ rid, cid ] ) }>x</Button> : '' }
+        </Table.Cell>
+      )}
+      </Table.Row>
+    ))
+  })
 
   return <div>
     <Heading>TableView</Heading>
@@ -196,7 +207,7 @@ function TableView( {data} ){
         </Table.Row>
       </Table.Head>
       <Table.Body>
-        {TableRows}
+        <TableRows />
       </Table.Body>
     </Table>
     <ColumnTags />
