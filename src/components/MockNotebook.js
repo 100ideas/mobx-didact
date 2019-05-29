@@ -1,9 +1,10 @@
 import React from 'react'
-
+import { createViewModel, getAllMethodsAndProperties } from 'mobx-utils'
+import { observer, Observer } from "mobx-react-lite";
 import nanoid from 'nanoid'
 import { 
   autorun, 
-  action,
+  action, 
   computed,
   decorate,
   observe,
@@ -11,12 +12,20 @@ import {
   isObservable,
   toJS,
   set as _set } from 'mobx';
-import { createViewModel, getAllMethodsAndProperties } from 'mobx-utils'
-import { observer, Observer } from "mobx-react-lite";
-
-
-// import { Button, Checkbox, Content, Control, Icon, Input, Panel } from "rbx";
-import { Button, Control, Delete, Heading, Icon, Field, Level, List, Section, Table, Tag, Title } from "rbx";
+import {
+  Button,
+  Control,
+  Delete,
+  Heading,
+  Icon,
+  Input,
+  Field,
+  Level,
+  List,
+  Section,
+  Table,
+  Tag,
+  Title } from "rbx";
 import {
   faList,
   faTable,
@@ -48,42 +57,73 @@ const Butns = ({ clickHandler }) =>
   </Button>
 </Button.Group>
 
+// TODO need to make this all observers& table componeents too
+// const DirectInput = ({currentVal, setVal}) => {
+  const DirectInput = ({cxn, address, setVal}) => {
+  const cxnVal = cxn.records.get(address[0])[address[1]]
+  const [editing, setEditing] = React.useState({static: true, readOnly: true})
+  const [value, setValue] = React.useState(cxnVal)
+  function toggleEditing(){ 
+    if(editing) setValue(cxnVal) // transition from edit -> static, so restore original/updated value
+    setEditing( editing ? false : {static: true, readOnly: true} )
+  }
 
-export function _CollectionViewer( props ){
+  const keys = {
+    TAB:    9,
+    ENTER:  13,
+    ESCAPE: 27
+  }
+
+  let handlers = {
+    onClick:  ev => { console.log('click', editing); ev.preventDefault();  ev.stopPropagation(); toggleEditing()},
+    // onFocus:  ev => toggleEditing(),
+    // onBlur is causing textareas to toggle when not directly clicked on
+    // onBlur:   ev => { toggleEditing(); ev.preventDefault();  ev.stopPropagation(); }, //? redundant w/ escape?
+    onChange: ev => setValue(ev.target.value),
+    onKeyDown: ({which}) => {
+      if (which === keys.ESCAPE) {
+        toggleEditing()
+        // reset value to mobx?
+        return;
+      }
+      if (which === keys.ENTER) {
+        // setVal(value)
+        cxn.setRecord([...address, value])
+        console.log('saving to mobx cxn', value)
+        toggleEditing()
+      }
+    }
+  }
+  
+  return <Input value={value} {...editing} {...handlers} />
+}
+
+export const CollectionViewer = observer (function _CollectionViewer( props ){
   const [viewMode, setViewMode] = React.useState('table')
 
-  // const data = props.data ? props.data : mobxMockCollection1
   const data = props.data ? props.data : {}
-  console.log(data.colInfo,)
-  
   return <Section>
-    
     <Button onClick={() => data.update( mockNewRow() )}>
       addRow
     </Button>
-
     <Button onClick={() => data.resetAllChanges()}>
       reset ALL
     </Button>
-
     <Butns clickHandler={ setViewMode } />
-
+    
     <Observer>
       {() => Viewers[ viewMode ]( {data} )}
     </Observer>
 
     <h3>log</h3>
     {data.log.map((entry, idx) => <pre key={"code-" + idx} >{JSON.stringify(entry, null, 2)}</pre>)}
-    
   </Section>
-}
+})
 
-export const CollectionViewer = observer(_CollectionViewer)
+// export const CollectionViewer = observer(_CollectionViewer)
 
 function TableView( {data} ){
-
   const ColumnTags = () => {
-
     const MakeTagGroup = ( {name, freq, hidden} ) => 
       <Control>
         <Tag.Group gapless onClick={() => data.toggleCol(name)}>
@@ -91,7 +131,6 @@ function TableView( {data} ){
           <Tag color="info">{freq}</Tag>
         </Tag.Group>
       </Control>
-
     return (
       <>
         <Heading>available columns</Heading>
@@ -120,25 +159,36 @@ function TableView( {data} ){
     </Table.Heading>
   )
 
+
+  // setter curry not working quite right
+  // const gitterSetter = (rid, cid) => ({
+  //   currentVal: data.records.get(rid)[cid],
+  //   setVal: (rid, cid) => (val) => data.setRecord([rid, cid, val])()
+  // })
+  const cxnGetter = (rid, cid) => data.records.get(rid)[cid]
+  const cxnSetter = (rid, cid) => (val) => data.setRecord([rid, cid, val])
+  
   const TableRows = data.recordIds.map( rid => 
     <Table.Row key={rid}>
-      {data.cols.map( cid => 
-        <Table.Cell key={rid + '-' + cid} className={data.isDirty(rid, cid) ? 'dirty' : ''}>
-          {data.records.get(rid)[cid]}
-          {/* <Button onClick={() => data.update({[rid]: {[cid]: 'updafrooo'}}) }>?</Button> */}
-          <Button onClick={() => data.setRecord([rid, cid, 'updafrooo']) }>?</Button>
-          { data.isDirty( rid, cid )
-            ? <Button small onClick={ () => data.resetLocalChange( [ rid, cid ] ) }>x</Button>
-            : ''
-          }
-        </Table.Cell>
-      )}
+    {data.cols.map( cid => 
+      <Table.Cell key={rid + '-' + cid} className={data.isDirty(rid, cid) ? 'dirty' : ''}>
+        {/* { data.records.get(rid)[cid] } */}
+        { cxnGetter(rid, cid) }
+        {/* <DirectInput _val={cxnGetter(rid, cid)} /> */}
+        {/* <DirectInput currentVal={cxnGetter(rid, cid)} setVal={cxnSetter(rid, cid)} /> */}
+        {/* <DirectInput currentVal={data.records.get(rid)[cid]} setVal={cxnSetter(rid, cid)} /> */}
+        <DirectInput cxn={data} address={[rid,cid]} setVal={cxnSetter(rid, cid)} />
+        {/* <Button onClick={() => data.update({[rid]: {[cid]: 'updafrooo'}}) }>?</Button> */}
+        {/* <Button onClick={() => data.setRecord([rid, cid, 'updafrooo']) }>?</Button> */}
+        <Button onClick={() => cxnSetter(rid, cid)('updafrooo') }>?</Button>
+        { data.isDirty( rid, cid ) ? <Button small onClick={ () => data.resetLocalChange( [ rid, cid ] ) }>x</Button> : '' }
+      </Table.Cell>
+    )}
     </Table.Row>
   )
 
   return <div>
     <Heading>TableView</Heading>
-    
     <Table bordered>
       <Table.Head>
         <Table.Row>
@@ -149,20 +199,11 @@ function TableView( {data} ){
         {TableRows}
       </Table.Body>
     </Table>
-
     <ColumnTags />
-
-    {/* <pre>{ JSON.stringify( data, null, 2 ) }</pre> */}
-
   </div>
 }
 
-
-
-
-
 function CardView( props ){
-
   return <div>
     <h2>CardView</h2>
     <pre>{JSON.stringify(props.data, null, 2)}</pre>
@@ -196,7 +237,6 @@ const Viewers = {
   list: ListView
 }
 
-
 function MobxCxnFactory(data) {
   const cxn = observable({
     _meta: {toggledCols: [] },
@@ -222,15 +262,15 @@ function MobxCxnFactory(data) {
       })
       cxn.log.push(updates)
     },
-    getCol(colId){ return Array.from(cxn.records.values()).map( row => colId in row ? row[colId] : null ) },
-
+    getCol(colId){ 
+      return Array.from(cxn.records.values()).map( row => colId in row ? row[colId] : null ) 
+    },
     getRecord( rid, cid = null ) {
       let rec = cxn.records.has(rid) ? cxn.records.get(rid) : false
       if (!rec) return {}
       if (cid === null) return toJS( rec )
       return toJS(rec[cid])
     },
-
     setRecord( [rid, cid, val] ) {
       let rec = cxn.records.has(rid) ? cxn.records.get(rid) : false
       if (!rec) return {}
@@ -260,17 +300,13 @@ function MobxCxnFactory(data) {
         }
       }
     },
-
     get colInfo() {
       let tallys = new Map()
       let tally = (cols) => {
         if (!isArray(cols)) cols = [cols]
         cols
           .filter( c => !skipCols.has(c) )
-          .map( col => tallys.has(col) 
-            ? tallys.set(col, tallys.get(col) + 1)
-            : tallys.set(col, 1)
-          )
+          .map( col => tallys.has(col) ? tallys.set(col, tallys.get(col) + 1) : tallys.set(col, 1) )
       }
       let skipCols = new Set(['isPropertyDirty', 'localComputedValues', 'localValues', 'model']) // maybe set by mobx viewModel
       cxn.records.forEach( (value, key) => {
@@ -278,8 +314,7 @@ function MobxCxnFactory(data) {
         // if (value.model) tally( Object.keys(value.model) ) 
         tally(Object.keys(value))
       })
-                 // [...[key, val]] 
-      let _sorted = [...tallys.entries()].sort( (a, b) => b[1] - a[1] )
+      let _sorted = [...tallys.entries()].sort( (a, b) => b[1] - a[1] ) //entries() => [...[key, val]] 
       console.log("column frequencies", _sorted)
       return { 
         sorted: _sorted.map(el => el[0]), 
@@ -290,7 +325,6 @@ function MobxCxnFactory(data) {
         }))
       }
     },
-    
     get rows() {
       return [...this.records.values()].map( v => toJS(v))
     },
@@ -318,17 +352,16 @@ function MobxCxnFactory(data) {
       })
     }
   }, {
-  records: observable,
-  resetLocalChange: action,
-  resetAllChanges: action,
-  update: action,
-  setRecord: action,
-  toggleCol: action,
-  rows: computed,
-  recordIds: computed,
-  colInfo: computed,
-//   // columns: computed,
-  })
+    records: observable,
+    resetLocalChange: action,
+    resetAllChanges: action,
+    update: action,
+    setRecord: action,
+    toggleCol: action,
+    rows: computed,
+    recordIds: computed,
+    colInfo: computed,
+  });
 
   // pseudo-constructor
   if ( isObservable(data) ) {
@@ -354,9 +387,8 @@ function MobxCxnFactory(data) {
     cxn.cols = data.columns.map( c => c.name ? c.name : c )
   }
 
-  return cxn
+  return cxn // Taa Da
 }
-
 
 
 export const mockCollection1 = {
