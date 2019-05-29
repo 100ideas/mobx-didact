@@ -54,16 +54,20 @@ export function _CollectionViewer( props ){
 
   // const data = props.data ? props.data : mobxMockCollection1
   const data = props.data ? props.data : {}
-  // console.log(data)
+  console.log(data.allCols, data.hiddenCols)
   
   return <Section>
     
     <Button onClick={() => data.update( mockNewRow )}>
       addRow
     </Button>
+
+    <Button onClick={() => data.resetAllChanges()}>
+      reset ALL
+    </Button>
+
     <Butns clickHandler={ setViewMode } />
 
-    {/* { Viewers[ viewMode ]( { data } ) } */}
     <Observer>
       {() => Viewers[ viewMode ]( {data} )}
     </Observer>
@@ -80,7 +84,13 @@ function TableView( {data} ){
   
   const TableHeadings = data.cols.map( (c, idx) => 
     <Table.Heading key={idx + '-' + c}>
-      {c}
+      {c} 
+      <Button 
+        size='small' 
+        color='danger' 
+        rounded 
+        inverted 
+        onClick={ () => data.toggleCol(c) }>x</Button>
     </Table.Heading>
   )
 
@@ -91,6 +101,10 @@ function TableView( {data} ){
         {data.records.get(rid)[cid]}
         {/* <Button onClick={() => data.update({[rid]: {[cid]: 'updafrooo'}}) }>?</Button> */}
         <Button onClick={() => data.setRecord([rid, cid, 'updafrooo']) }>?</Button>
+        { data.isDirty( rid, cid )
+          ? <Button small onClick={ () => data.resetLocalChange( [ rid, cid ] ) }>x</Button>
+          : ''
+        }
       </Table.Cell>
     )}
   </Table.Row>
@@ -153,6 +167,7 @@ const Viewers = {
 
 function MobxCxnFactory(data) {
   const cxn = observable({
+    _meta: {toggledCols: [] },
     cols: [],
     records: new Map(),
     log: [],
@@ -163,12 +178,7 @@ function MobxCxnFactory(data) {
           let _old = cxn.records.get(rid)
           let _new = obj[rid]
           let _merge = {..._old, ..._new}
-          // // obj = {[rid]: {..._old, ..._new}}
-          // _set(this.records, rid, _merged)
-          // // return _merged
-          console.log("cxn updating", toJS(cxn.records.get(rid)), ' + ', obj[rid], ' -> ', _merge )
-          // cxn.records.merge( {[rid]: obj[rid]} )
-          // cxn.records.set( rid, _merge )
+          // need to directly set via property access for mobx proxy to notice
           Object.keys(_new).map( key => {
             _old[key] = _new[key]
           })
@@ -180,7 +190,7 @@ function MobxCxnFactory(data) {
       })
       cxn.log.push(updates)
     },
-    getCol(colId){ return Array.from(cxn.records.values()).map( row => row[colId] ) },
+    getCol(colId){ return Array.from(cxn.records.values()).map( row => colId in row ? row[colId] : null ) },
 
     getRecord( rid, cid = null ) {
       let rec = cxn.records.has(rid) ? cxn.records.get(rid) : false
@@ -197,6 +207,50 @@ function MobxCxnFactory(data) {
         cxn.log.push([rid, cid, val])
       }
     },
+    toggleCol( col ) {
+      let colIdx = cxn.cols.indexOf(col)
+      let _colIdx = cxn.cols.findIndex( entry => entry.toString() === col.toString() )
+      console.log("cxn.cols.indexOf(col):", colIdx, toJS(cxn.cols[colIdx]) )
+      console.log("cxn.cols.findIndex():", _colIdx, toJS(cxn.cols[_colIdx]) )
+      if ((colIdx || _colIdx) > -1) {
+        console.log("found col ", col, "in cols array, removing...")
+        if (!cxn.cols.remove(col)) console.error("something went wrong removing", col, "from cols")
+        cxn._meta.toggledCols.push(col)
+      } else {
+        _colIdx = cxn._meta.toggledCols.findIndex( entry => entry.toString() === col.toString() )
+        if ( _colIdx > -1 ) {
+          console.log("swapping", col, "from cxn._meta.toggledCols into cxn.cols" )
+          cxn._meta.toggledCols.remove(col)
+          cxn.cols.push(col)
+        }
+      }
+    },
+
+    get allCols() {
+      let tallys = new Map()
+      let tally = (cols) => {
+        if (!isArray(cols)) cols = [cols]
+        cols
+          .filter( c => !skipCols.has(c) )
+          .map( col => tallys.has(col) 
+            ? tallys.set(col, tallys.get(col) + 1)
+            : tallys.set(col, 0)
+          )
+      }
+      let skipCols = new Set(['isPropertyDirty', 'localComputedValues', 'localValues', 'model']) // maybe set by mobx viewModel
+      cxn.records.forEach( (value, key) => {
+        // easier to get keys from model ... but probably a bad idea will get out of sync
+        // if (value.model) tally( Object.keys(value.model) ) 
+        tally(Object.keys(value))
+      })
+                 // [...[key, val]] 
+      let _sorted = [...tallys.entries()].sort( (a, b) => b[1] - a[1] )
+      console.log("column frequencies", _sorted)
+      return _sorted.map( el => el[0] )
+    },
+    get hiddenCols() {
+      return cxn.allCols.filter(colName => cxn.cols.indexOf(colName) < 0)
+    },
     
     get rows() {
       return [...this.records.values()].map( v => toJS(v))
@@ -206,24 +260,34 @@ function MobxCxnFactory(data) {
     },
     isDirty(rid, cid) {
       let rec = cxn.records.has(rid) ? cxn.records.get(rid) : false
-      if (!rec) return false
+      if (!rec || !rec.model) return false
       if (rec.isPropertyDirty) {
         let dirty = rec.isPropertyDirty(cid)
-        console.log(dirty)
         return dirty
       }
+      return false // just to be sure
+    },
+    resetLocalChange([rid, cid]) {
+      let rec = cxn.records.has(rid) ? cxn.records.get(rid) : false
+      // guard against non-viewModel-enhanced records
+      if (!rec && !rec.model && !rec.cid) return {}
+      return rec.resetProperty(cid)
+    },
+    resetAllChanges() {
+      cxn.records.forEach( (value, key) => {
+        if (value.model) value.reset()
+      })
     }
   }, {
-
-//   cols: observable,
-//   // recordIds: observable,
   records: observable,
-//   log: observable,
-//   update: action,
-//   // getCol: computed,
-//   // getRecord: computed,
-//   rows: computed,
-//   recordIds: computed,
+  resetLocalChange: action,
+  resetAllChanges: action,
+  update: action,
+  setRecord: action,
+  toggleCol: action,
+  rows: computed,
+  recordIds: computed,
+  allCols: computed,
 //   // columns: computed,
   })
 
@@ -251,7 +315,6 @@ function MobxCxnFactory(data) {
     cxn.cols = data.columns.map( c => c.name ? c.name : c )
   }
 
-
   return cxn
 }
 
@@ -277,103 +340,21 @@ export const mockCollection1 = {
   ],
 };
 
-const mockNewRow = { 'rid11': {region: "Baztarctica", sector: "Fooing", customer: "Bazman Bazzer", product: "Foobar Baz", amount: 12333}}
+const mockNewRow = { 'rid11': {region: "Baztarctica", sector: "Fooing", customer: "Bazman Bazzer", product: "Foobar Baz", amount: 1337, "my_FAV_ROW": 'nullo'}}
 
-// export const mobxMockCollection1 = new MobxCollection(mockCollection1)
-// export const mobxMockCollection2 = new MobxCollection(mobxMockCollection1)
+// thanks, @Christoph https://stackoverflow.com/a/1058753
+function isArray(obj) {
+  return Object.prototype.toString.call(obj) === '[object Array]';
+}
 
 export const mobxMockCollection1 = MobxCxnFactory(mockCollection1)
-
-// export const viewModel = createViewModel(mobxMockCollection1);
 export const viewModel = MobxCxnFactory(mobxMockCollection1);
-// viewModel.records = createViewModel(mobxMockCollection1.records)
-// export const viewModel = mobxMockCollection1;
 
 console.log(getAllMethodsAndProperties(viewModel))
 autorun(() => {
-  // console.log(toJS(viewModel.model.records), ",", toJS(viewModel.records))
   console.log(viewModel.changedValues)
 })
 
 viewModel.cols.push( 'rid12' )
 // viewModel.cols[5] = 'rid08'
 // _set(viewModel.records, 'rid12', mockNewRow['rid11'] )
-// viewModel['new'] = {foo: 'foo'}
-
-// export {viewModel}
-
-
-
-
-
-
-
-// class MobxCollection {
-//   cols = []
-//   records = new Map();
-//   log = []
-
-//   constructor(_data) {
-//     // _data.rows.map( r => this.records.set( r.id ? r.id : nanoid(4), r ))
-//     // if (isObservable(_data)) {
-//     //   this.records = _data.records
-//     //   this.cols = _data.cols
-//     // } else {
-//       _data.rows.map( r => {
-//         const _id = r.id ? r.id : nanoid(4)
-//         this.records.set( _id, r )
-//         // _set(this.records, _id, r)
-//         // this.recordIds.push( _id )
-//       })
-//       this.cols = _data.columns.map( c => c.name ? c.name : c )
-//     // }
-//   }
-
-//   //action
-//   update(obj) {
-//     let maybe_rids = Object.keys(obj)
-//     let updates = maybe_rids.map(rid => {
-//       if(this.records.has(rid)) {
-//         // let _old = this.records[rid]
-//         // let _new = obj[rid]
-//         // let _merged = {..._old, ..._new}
-//         // // obj = {[rid]: {..._old, ..._new}}
-//         // _set(this.records, rid, _merged)
-//         // // return _merged
-//         this.records.merge(obj)
-//         return obj
-//       }
-//       this.records.set(rid, obj[rid])
-//       return obj  
-//     })
-//     this.log.push(updates)
-//   };
-
-//   //computed?
-//   getCol = colId => Array.from(this.records.values()).map( row => row[colId] )
-  
-//   getRecord = rid => toJS(this.records.get(rid))
-
-//   // get columns(){
-//   //   return this.cols
-//   // }
-//   get rows () {
-//     return [...this.records.values()].map( v => toJS(v))
-//   }
-//   get recordIds() {
-//     return [...this.records.keys()]
-//   }
-// }
-
-// decorate(MobxCollection, {
-//   cols: observable,
-//   // recordIds: observable,
-//   records: observable,
-//   log: observable,
-//   update: action,
-//   // getCol: computed,
-//   // getRecord: computed,
-//   rows: computed,
-//   recordIds: computed,
-//   // columns: computed,
-// })
