@@ -17,10 +17,10 @@ function App() {
         <hr />
         <CollectionViewer data={viewModel}/>
         
-        {/*
-        <RbxPanel />
+        
+        {/* <RbxPanel /> */}
         <MockOpsList />
-        */}
+        
 
       </div>
     </StoreProvider>

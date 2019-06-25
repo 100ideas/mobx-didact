@@ -66,14 +66,22 @@ const Butns = ({ clickHandler }) =>
     
     // TODO PROBLEM local useState store not upating to mobx changes to cxnVal
     // - obviously. it's using its own local state...
-    const [value, setValue] = React.useState('') 
-    const localOrCxnVal = () => (editing) ? value : cxn.records.get(address[0])[address[1]]
+    const [value, setValue] = React.useState('')
+    const localOrCxnVal = () => 
+      (editing) ? value : cxn.records.get(address[0])[address[1]]
+    
     
     function toggleEditing(){ 
-      if(!editing) {
-        console.log("DirectInput: transition from edit -> static, so restore original/updated value:", localOrCxnVal())
-      }
+      console.log('toggleEditing', editing, ' -> ', !editing)
+      console.log('value.length:', value.length, 'value.length < 1', value.length < 1)
       setEditing( !editing )
+      if(editing) {
+        // console.log("DirectInput: transition from edit -> static, so restore original/updated value:", localOrCxnVal())
+        if(value.length < 1) {
+          console.log( 'setting val from cxn', value, ' -> ', cxn.records.get(address[0])[address[1]])
+          setValue(cxn.records.get(address[0])[address[1]])
+        }
+      }
     }
 
     const keys = {
@@ -86,7 +94,10 @@ const Butns = ({ clickHandler }) =>
       onClick: ev => { console.log('click', editing); ev.preventDefault();  ev.stopPropagation(); toggleEditing()},
       // onFocus:  ev => toggleEditing(),
       // onBlur:   ev => { toggleEditing(); ev.preventDefault();  ev.stopPropagation(); }, //? redundant w/ escape?
-      onChange: ev => setValue(ev.target.value),
+      onChange: ev => {
+        console.log("onChange setting local Value", value, ' -> ', ev.target.value)
+        setValue(ev.target.value)
+      },
       onKeyDown: ({which}) => {
         if (which === keys.ESCAPE || which === keys.TAB) {
           console.log("which key:", which)
@@ -250,7 +261,7 @@ const Viewers = {
 
 function MobxCxnFactory(data) {
   const cxn = observable({
-    _meta: {toggledCols: [] },
+    _meta: { toggledCols: [] },
     cols: [],
     records: new Map(),
     log: [],
