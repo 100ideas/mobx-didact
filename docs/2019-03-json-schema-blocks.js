@@ -239,7 +239,7 @@ export const state = {
       isbns       : {
         '@id'      : 'isbns',
         definition : '#/definitions/isbn_10',
-        sources    : [ ('sources': ['@/blocks/1', '@collections/isbns']) ],
+        sources    : [ {'sources': ['@/blocks/1', '@collections/isbns']} ],
         values     : [
           { title: '_cuid6', _meta: { cuid: '_cuid2', source: '@/block1/isbns/_cuid1' } },
           { title: '_cuid7', _meta: { cuid: '_cuid3', source: '@/block1/isbns/_cuid2' } },

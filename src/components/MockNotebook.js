@@ -145,7 +145,7 @@ export const CollectionViewer = observer (function _CollectionViewer( props ){
 function TableView( {data} ){
   const ColumnTags = () => {
     const MakeTagGroup = ( {name, freq, hidden} ) => 
-      <Control>
+      <Control key={"columntags-" + name}>
         <Tag.Group gapless onClick={() => data.toggleCol(name)}>
           <Tag color={hidden ? "light" : "dark"}>{name}</Tag>
           <Tag color="info">{freq}</Tag>
@@ -169,8 +169,8 @@ function TableView( {data} ){
           <Delete 
             size='small' 
             color='danger' 
-            rounded 
-            inverted 
+            rounded='true'
+            inverted='true'
             onClick={ () => data.toggleCol( c ) }>
             x
           </Delete>
@@ -190,8 +190,20 @@ function TableView( {data} ){
   const TableRows = observer( () => {
     
     return (data.recordIds.map( rid => 
-      <Table.Row key={rid}>
-      {data.cols.map( cid => 
+      <Table.Row key={ rid }>
+        
+        <Table.Cell key={ rid + '-meta' }>
+          <Delete 
+            size='small' 
+            color='danger' 
+            rounded='true'
+            inverted='true'
+            onClick={ () => data.removeRow( rid ) }>
+            x
+          </Delete>
+        </Table.Cell>
+        
+        {data.cols.map( cid => 
         <Table.Cell key={rid + '-' + cid} className={data.isDirty(rid, cid) ? 'dirty' : ''}>
           {/* { data.records.get(rid)[cid] } */}
           {/* { cxnGetter(rid, cid) } */}
@@ -204,7 +216,7 @@ function TableView( {data} ){
           <Button onClick={() => cxnSetter(rid, cid)('updafrooo') }>?</Button>
           { data.isDirty( rid, cid ) ? <Button small onClick={ () => data.resetLocalChange( [ rid, cid ] ) }>x</Button> : '' }
         </Table.Cell>
-      )}
+        )}
       </Table.Row>
     ))
   })
@@ -214,6 +226,7 @@ function TableView( {data} ){
     <Table bordered>
       <Table.Head>
         <Table.Row>
+          <Table.Cell>{/*empty top-left cell*/}</Table.Cell>
           {TableHeadings}
         </Table.Row>
       </Table.Head>
@@ -301,6 +314,10 @@ function MobxCxnFactory(data) {
         cxn.log.push([rid, cid, val])
       }
     },
+    removeRow( rid ) {
+      let row = cxn.records.has(rid) ? cxn.records.delete(rid) : false
+      return row
+    }, 
     toggleCol( col ) {
       let colIdx = cxn.cols.indexOf(col)
       let _colIdx = cxn.cols.findIndex( entry => entry.toString() === col.toString() )
@@ -381,20 +398,46 @@ function MobxCxnFactory(data) {
     setRecord: action,
     toggleCol: action,
     rows: computed,
+    removeRow: action,
     recordIds: computed,
     colInfo: computed,
   });
 
   // pseudo-constructor
+  // if input collection is already observable, it's already in mobx so we generate
+  //   mobx viewModels for each record and return them in a new collection object.
+  // row is atomic unit of collection and its contents but not set of rows themselves are 
+  //   tracked as viewModels
+  // changes to elements are stored in cloned collections and can be reset to parent value,
+  //   even if parent value changes. Doesn't work yet for rows.
+  // TODO preserve row-level changes to cloned collection if newer than changes to parent
   if ( isObservable(data) ) {
     console.dir("pseudo-constructor", toJS(data.records))
     data.records.forEach( (value, key) => {
       cxn.records.set(key, createViewModel(value))
     })
-    // hande additions from upstream
+    // TODO hande additions or deletions of rows from upstream.
+    /* observe event:
+      type: "add"
+      name: "V1GB"
+      object: ObservableMap$$1 { enhancer: function, name: "ObservableObject@12.records", _keysAtom: Atom$$1, _data: Map, _hasMap: Map, … }
+      newValue: Proxy {, … } 
+    */
     observe(data.records, (change) => {
-      console.log('pseudoConstructor observe data.records.keys,', toJS(change))
-      cxn.records.set(change.name, createViewModel(data.records.get(change.name)))
+      switch ( change.type ) {
+        case 'add':
+        case 'update':
+          console.log(`(ViewModel Observer): "${change.type}" viewModel record "${change.name}"`)
+          cxn.records.set( change.name, createViewModel( data.records.get( change.name ) ) )
+          break;
+        case 'delete':
+          console.log(`(ViewModel Observer): deleting viewModel record row "${change.name}"`)
+          cxn.records.delete( change.name )
+          break;
+        default:
+          console.error(`(ViewModel Observer): WARNING unknown record change type "${change.type}"`)
+      }
+      
     })
     // TODO handle deletions from upstream - remove viewModel from local?
     // ...
@@ -423,7 +466,7 @@ export const mockCollection1 = {
   ],
   rows: [
     {region: "South America", sector: "Banking", customer: "Beacon Systems", product: "EnviroCare Max", amount: 10294},
-    {region: "North America", sector: "Health", customer: "Global Services", product: "EnviroCare", amount: 2895},
+    {region: "North America", sector: {_ref: "sector/1", type: "ref", sector: "Health"}, customer: "Global Services", product: "EnviroCare", amount: 2895},
     {region: "North America", sector: "Health", customer: "Supply Warehouse", product: "EnviroCare Max", amount: 3503},
     {region: "Australia", sector: "Banking", customer: "Apollo Inc", product: "SolarOne", amount: 1379},
     {region: "Europe", sector: "Health", customer: "Beacon Systems", product: "SolarOne", amount: 2867},

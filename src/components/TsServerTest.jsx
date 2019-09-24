@@ -16,7 +16,7 @@ import { observer, Observer } from "mobx-react-lite";
 
 
 // import { Button, Checkbox, Content, Control, Icon, Input, Panel } from "rbx";
-import { Button, Icon, Control, Tag, Field, Heading, Table, Level, Delete } from "rbx";
+import { Button, Icon, Control, Tag, Field, Heading, Table, Level, Delete, Section } from "rbx";
 // import { Button, Control, Delete, Heading, Icon, Field, Level, List, Section, Table, Tag, Title } from "rbx";
 import {
   faList,
@@ -73,7 +73,8 @@ export function _CollectionViewer( props ){
     <Butns clickHandler={ setViewMode } />
 
     <Observer>
-      {() => Viewers[ viewMode ]( {data} )}
+      {/* {() => Viewers[ viewMode ]( {data} )} */}
+      {() => TableView( {data} )}
     </Observer>
 
     <h3>log</h3>

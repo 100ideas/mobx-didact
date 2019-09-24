@@ -2,6 +2,7 @@ import React from 'react'
 import { StoreProvider } from "./stores";
 import { MockOpsList } from './components/MockOpsList'
 import { CollectionViewer, mobxMockCollection1, viewModel } from './components/MockNotebook'
+// import { CollectionViewer as tsCollectionViewer } from './components/TsServerTest'
 
 import "rbx/index.css";
 import './App.scss';
@@ -18,9 +19,8 @@ function App() {
         <CollectionViewer data={viewModel}/>
         
         
-        {/* <RbxPanel /> */}
+        <RbxPanel />
         <MockOpsList />
-        
 
       </div>
     </StoreProvider>
